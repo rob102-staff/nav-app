@@ -1,0 +1,5 @@
+# VSCode
+.vscode/
+
+# NPM files
+node_modules/
