@@ -13,8 +13,8 @@ var config = {
     // Display info
     MAP_COLOUR_HIGH: "#00274C",      // Michigan blue
     MAP_COLOUR_LOW: "#ffffff",       // White
-    FIELD_COLOUR_HIGH: "#ffffff",    // White
-    FIELD_COLOUR_LOW: "#444444",     // Grey
+    FIELD_COLOUR_HIGH: "#444444",    // White
+    FIELD_COLOUR_LOW: "#ffffff",     // Grey
     FIELD_ALPHA: "99",
     PATH_COLOUR: "#00B2A9",          // Taubman Teal
     VISITED_CELL_COLOUR: "#989C97",  // Angell Hall Ash
