@@ -350,7 +350,8 @@ class SceneView extends React.Component {
 
     // Get the window size and watch for resize events.
     this.rect = this.refs.clickCanvas.getBoundingClientRect();
-    window.addEventListener('resize', (evt) => this.handleResize(evt));
+    window.addEventListener('resize', (evt) => this.handleWindowChange(evt));
+    window.addEventListener('scroll', (evt) => this.handleWindowChange(evt));
 
     // Try to connect to the C++ backend.
     this.ws.attemptConnection();
@@ -377,7 +378,7 @@ class SceneView extends React.Component {
     }
   }
 
-  handleResize(evt) {
+  handleWindowChange(evt) {
     this.rect = this.refs.clickCanvas.getBoundingClientRect();
   }
 
