@@ -19,6 +19,16 @@ h1,h2,h3 {
   line-height:1.2
 }
 
+h1 a {
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 0;
+}
+
+a:hover {
+  color: #00274C !important;
+}
+
 .canvas-container {
   border: 1px solid #000000;
   margin-left: auto;
