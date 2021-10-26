@@ -15,6 +15,23 @@ import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing.js"
  *     BUTTONS
  *******************/
 
+function StatusMessage(props) {
+  var msg = [];
+  msg.push("Robot Cell: (" + props.robotCell + ")");
+  if (props.clickedCell.length > 0) {
+    msg.push("Clicked Cell: (" + props.clickedCell + ")");
+  }
+  if (props.showField) {
+    msg.push("Field: " + props.fieldVal.toFixed(4));
+  }
+
+  return (
+    <div className="status-msg">
+      {msg.join('\xa0\xa0\xa0')}
+    </div>
+  );
+}
+
 function ConnectionStatus(props) {
   var msg = "Wait";
   var colour = "#ffd300";
@@ -301,6 +318,8 @@ class SceneView extends React.Component {
       goalCell: [],
       goalValid: true,
       field: [],
+      fieldRaw: [],
+      fieldHoverVal: 0,
       showField: false,
       isRobotClicked: false,
       algo: 'PFIELD'
@@ -320,8 +339,20 @@ class SceneView extends React.Component {
     return [u, v];
   }
 
+  pixelsToCell(u, v) {
+    var row = Math.floor(v / this.state.cellSize);
+    var col = Math.floor(u / this.state.cellSize);
+    return [row, col];
+  }
+
   componentDidMount() {
     this.visitGrid.init(this.refs.visitCellsCanvas);
+
+    // Get the window size and watch for resize events.
+    this.rect = this.refs.clickCanvas.getBoundingClientRect();
+    window.addEventListener('resize', (evt) => this.handleResize(evt));
+
+    // Try to connect to the C++ backend.
     this.ws.attemptConnection();
   }
 
@@ -346,6 +377,10 @@ class SceneView extends React.Component {
     }
   }
 
+  handleResize(evt) {
+    this.rect = this.refs.clickCanvas.getBoundingClientRect();
+  }
+
   handlePath(msg) {
     this.setState({path: msg.path});
     this.i = 0;
@@ -357,8 +392,9 @@ class SceneView extends React.Component {
                             config.VISITED_CELL_COLOUR, config.SMALL_CELL_SCALE);
   }
 
-  handleField(msg){
-    this.setState({field: normalizeList(msg.field)});
+  handleField(msg) {
+    var rawField = msg.field.slice();
+    this.setState({ field: normalizeList(msg.field), fieldRaw: rawField });
   }
 
   updateSocketStatus(status) {
@@ -409,18 +445,16 @@ class SceneView extends React.Component {
 
     var x = event.clientX - this.rect.left;
     var y = this.rect.bottom - event.clientY;
-    var row = Math.floor(y / this.state.cellSize);
-    var col = Math.floor(x / this.state.cellSize);
-    this.setState({ clickedCell: [row, col] });
+    this.setState({ clickedCell: this.pixelsToCell(x, y) });
   }
 
   handleMouseDown(event) {
-    this.rect = this.refs.clickCanvas.getBoundingClientRect();
     var x = event.clientX - this.rect.left;
     var y = this.rect.bottom - event.clientY;
     var robotRadius = config.ROBOT_SIZE *this.state.pixelsPerMeter / 2;
     // if click is near robot, set isDown as true
-    if (x < this.state.x + robotRadius && x > this.state.x - robotRadius && y < this.state.y + robotRadius && y > this.state.y - robotRadius) {
+    if (x < this.state.x + robotRadius && x > this.state.x - robotRadius &&
+        y < this.state.y + robotRadius && y > this.state.y - robotRadius) {
       this.setState({ isRobotClicked: true });
     }
     else {
@@ -429,11 +463,19 @@ class SceneView extends React.Component {
   }
 
   handleMouseMove(event) {
-    if (!this.state.isRobotClicked) return;
+    if (!this.state.showField && !this.state.isRobotClicked) return;
 
     var x = event.clientX - this.rect.left;
     var y = this.rect.bottom - event.clientY;
-    this.setState({x: x, y: y});
+
+    if (this.state.isRobotClicked) {
+      this.setState({ x: x, y: y });
+    }
+    if (this.state.showField && this.state.fieldRaw.length > 0) {
+      var cell = this.pixelsToCell(x, y);
+      var idx = Math.max(Math.min(cell[1] + cell[0] * this.state.width, this.state.num_cells - 1), 0);
+      this.setState({ fieldHoverVal: this.state.fieldRaw[idx] });
+    }
   }
 
   handleMouseUp() {
@@ -455,8 +497,7 @@ class SceneView extends React.Component {
   }
 
   findDirection(){
-    var newCoord = [];
-    newCoord = this.posToPixels(this.state.path[this.i][1], this.state.path[this.i][0]);
+    var newCoord = this.posToPixels(this.state.path[this.i][1], this.state.path[this.i][0]);
     if (newCoord[0] == this.state.x && newCoord[1] == this.state.y) return;
     this.setState({x: newCoord[0], y: newCoord[1]});
   }
@@ -482,13 +523,12 @@ class SceneView extends React.Component {
     if (!this.setGoal(this.state.clickedCell)) return;
     // Clear visted canvas
     this.visitGrid.clear();
-    var start_row = Math.floor(this.state.y / this.state.cellSize);
-    var start_col = Math.floor(this.state.x / this.state.cellSize);
+    var start_cell = this.pixelsToCell(this.state.x, this.state.y);
     var plan_data = {type: "plan",
                      data: {
                         map_name: this.state.mapfile.name,
                         goal: "[" + this.state.clickedCell[0] + " " + this.state.clickedCell[1] + "]",
-                        start: "[" + start_row + " " + start_col + "]",
+                        start: "[" + start_cell[0] + " " + start_cell[1] + "]",
                         algo: config.ALGO_TYPES[this.state.algo].label
                       }
                     };
@@ -524,12 +564,14 @@ class SceneView extends React.Component {
 
         <div className="status-wrapper">
           <div className="field-toggle-wrapper">
-            Show Field:
+            <span>Show Field:</span>
             <label className="switch">
               <input type="checkbox" onClick={() => this.onFieldCheck()}/>
               <span className="slider round"></span>
             </label>
           </div>
+          <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)} clickedCell={this.state.clickedCell}
+                         showField={this.state.showField} fieldVal={this.state.fieldHoverVal}/>
           <ConnectionStatus status={this.state.connection}/>
         </div>
 

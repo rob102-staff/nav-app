@@ -92,6 +92,7 @@ canvas {
   overflow: hidden;
   display: flex;
   flex-direction: row;
+  padding-top: 0.3em;
 }
 
 .status {
@@ -104,11 +105,18 @@ canvas {
   float: right;
 }
 
+.status-msg {
+  margin-right: auto;
+  margin-top: auto;
+  margin-bottom: auto;
+  padding-left: 1em;
+  font-size: 14px;
+}
+
 .field-toggle-wrapper {
   text-decoration: none;
-  flex:  auto;
   margin-top: auto;
-  margin-right: auto;
+  margin-bottom: auto;
 }
 
 .progress {
