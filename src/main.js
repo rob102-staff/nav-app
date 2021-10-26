@@ -303,7 +303,7 @@ class SceneView extends React.Component {
       field: [],
       showField: false,
       isRobotClicked: false,
-      algo: 'ASTAR'
+      algo: 'PFIELD'
     };
 
     this.ws = new WSHelper(config.HOST, config.PORT, config.ENDPOINT, config.CONNECT_PERIOD);
