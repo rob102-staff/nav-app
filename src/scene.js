@@ -1,5 +1,4 @@
 import React from "react";
-import ReactDOM from "react-dom";
 
 import InputLabel from '@material-ui/core/InputLabel';
 import MenuItem from '@material-ui/core/MenuItem';
@@ -148,149 +147,6 @@ class DrawRobot extends React.Component {
  *     CANVAS
  *******************/
 
-class DrawMap extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.mapCanvas = React.createRef();
-    this.mapGrid = new GridCellCanvas();
-  }
-
-  componentDidMount() {
-    this.mapGrid.init(this.mapCanvas.current);
-  }
-
-  shouldComponentUpdate(nextProps, nextState) {
-    return nextProps.cells !== this.props.cells;
-  }
-
-  componentDidUpdate() {
-    this.mapGrid.setSize(this.props.width, this.props.height);
-    this.mapGrid.drawCells(this.props.cells, config.MAP_COLOUR_LOW, config.MAP_COLOUR_HIGH);
-  }
-
-  render() {
-    return (
-      <canvas ref={this.mapCanvas}
-              width={config.MAP_DISPLAY_WIDTH}
-              height={config.MAP_DISPLAY_WIDTH}>
-      </canvas>
-    );
-  }
-}
-
-class DrawField extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.fieldCanvas = React.createRef();
-    this.fieldGrid = new GridCellCanvas();
-  }
-
-  componentDidMount() {
-    this.fieldGrid.init(this.fieldCanvas.current);
-  }
-
-  shouldComponentUpdate(nextProps, nextState) {
-    return nextProps.field !== this.props.field || nextProps.showField !== this.props.showField;
-  }
-
-  componentDidUpdate() {
-    if (this.props.showField) {
-      this.fieldGrid.setSize(this.props.width, this.props.height);
-      this.fieldGrid.drawCells(this.props.field, config.FIELD_COLOUR_LOW, config.FIELD_COLOUR_HIGH, config.FIELD_ALPHA);
-    }
-    else {
-      this.fieldGrid.clear();
-    }
-  }
-
-  render() {
-    return (
-      <canvas ref={this.fieldCanvas}
-              width={config.MAP_DISPLAY_WIDTH}
-              height={config.MAP_DISPLAY_WIDTH}>
-      </canvas>
-    );
-  }
-}
-
-class DrawCells extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.pathUpdated = true;
-    this.clickedUpdated = true;
-    this.goalUpdated = true;
-
-    this.cellsCanvas = React.createRef();
-    this.cellGrid = new GridCellCanvas();
-  }
-
-  componentDidMount() {
-    this.cellGrid.init(this.cellsCanvas.current);
-  }
-
-  drawPath() {
-    for (var i in this.props.path) {
-      this.cellGrid.drawCell(this.props.path[i], this.props.cellSize,
-                             config.PATH_COLOUR, config.SMALL_CELL_SCALE);
-    }
-  }
-
-  shouldComponentUpdate(nextProps, nextState) {
-    this.pathUpdated = nextProps.path !== this.props.path;
-    this.clickedUpdated = nextProps.clickedCell !== this.props.clickedCell;
-    this.goalUpdated = nextProps.goalCell !== this.props.goalCell;
-
-    if (this.clickedUpdated && this.props.clickedCell.length > 0) {
-      this.cellGrid.clearCell(this.props.clickedCell, this.props.cellSize)
-    }
-    if (this.goalUpdated && this.props.goalCell.length > 0) {
-      this.cellGrid.clearCell(this.props.goalCell, this.props.cellSize)
-    }
-
-    return (this.pathUpdated || this.clickedUpdated || this.goalUpdated);
-  }
-
-  componentDidUpdate() {
-    // The first time the visited cells are null, the map was reset. Clear the
-    // canvas. Make sure this is only done once using this.clear.
-    this.cellGrid.clear();
-
-    // If the map has been loaded, we can draw the cells.
-    if (this.props.loaded) {
-      // Draw the found path.
-      if (this.pathUpdated) {
-        this.drawPath();
-      }
-
-      // If there's a clicked cell, draw it.
-      if (this.props.clickedCell.length > 0) {
-        this.cellGrid.drawCell(this.props.clickedCell, this.props.cellSize,
-                               config.CLICKED_CELL_COLOUR, config.SMALL_CELL_SCALE);
-      }
-
-      // If there's a goal cell, clear it in case it was clicked then draw it.
-      if (this.props.goalCell.length > 0) {
-        this.cellGrid.clearCell(this.props.goalCell, this.props.cellSize);
-        var colour = this.props.goalValid ? config.GOAL_CELL_COLOUR : config.BAD_GOAL_COLOUR;
-        this.cellGrid.drawCell(this.props.goalCell, this.props.cellSize,
-                               colour, config.SMALL_CELL_SCALE);
-      }
-    }
-  }
-
-  render() {
-    return (
-      <canvas ref={this.cellsCanvas}
-              width={config.MAP_DISPLAY_WIDTH}
-              height={config.MAP_DISPLAY_WIDTH}>
-      </canvas>
-    );
-  }
-}
-
 function MapFileSelect(props) {
   return (
     <div className="file-input-wrapper">
@@ -323,17 +179,24 @@ class SceneView extends React.Component {
       y: config.MAP_DISPLAY_WIDTH / 2,
       theta: 0,
       mapfile: null,
-      path: [],
-      clickedCell: [],
-      goalCell: [],
-      goalValid: true,
       field: [],
       fieldRaw: [],
       fieldHoverVal: 0,
       showField: false,
       isRobotClicked: false,
-      algo: 'PFIELD'
+      algo: 'PFIELD',
+      mapColours: [config.MAP_COLOUR_LOW, config.MAP_COLOUR_HIGH],
+      fieldColours: [config.FIELD_COLOUR_LOW, config.FIELD_COLOUR_HIGH],
+      markedCells: [],
+      markedColours: [],
+      visitCells: [],
+      visitCellColours: []
     };
+
+    this.path = [];
+    this.clickedCell = [];
+    this.goalCell = [];
+    this.goalValid = true;
 
     this.ws = new WSHelper(config.HOST, config.PORT, config.ENDPOINT, config.CONNECT_PERIOD);
     this.ws.userHandleMessage = (evt) => { this.handleMessage(evt); };
@@ -341,7 +204,6 @@ class SceneView extends React.Component {
 
     this.clickCanvas = React.createRef();
     this.visitCellsCanvas = React.createRef();
-    this.visitGrid = new GridCellCanvas();
   }
 
   posToPixels(x, y) {
@@ -358,8 +220,6 @@ class SceneView extends React.Component {
   }
 
   componentDidMount() {
-    this.visitGrid.init(this.visitCellsCanvas.current);
-
     // Get the window size and watch for resize events.
     this.rect = this.clickCanvas.current.getBoundingClientRect();
     window.addEventListener('resize', (evt) => this.handleWindowChange(evt));
@@ -395,19 +255,23 @@ class SceneView extends React.Component {
   }
 
   handlePath(msg) {
-    this.setState({path: msg.path});
+    this.path = msg.path;
+    this.setMarkedCells();
     this.i = 0;
     this.interval = setInterval(this.timer.bind(this), 100);
   }
 
   handleCells(msg) {
-    this.visitGrid.drawCell(msg.cell, this.state.cellSize,
-                            config.VISITED_CELL_COLOUR, config.SMALL_CELL_SCALE);
+    var visitNew = [...this.state.visitCells];
+    visitNew.push(msg.cell);
+    var colours = new Array(visitNew.length).fill(config.VISITED_CELL_COLOUR);
+    this.setState({visitCells: visitNew,
+                   visitCellColours: colours});
   }
 
   handleField(msg) {
-    var rawField = msg.field.slice();
-    this.setState({ field: normalizeList(msg.field), fieldRaw: rawField });
+    var rawField = [...msg.field];
+    this.setState({ field: [...normalizeList(msg.field)], fieldRaw: rawField });
   }
 
   updateSocketStatus(status) {
@@ -417,9 +281,13 @@ class SceneView extends React.Component {
   }
 
   updateMap(result) {
-    this.visitGrid.clear();
     var loaded = result.cells.length > 0;
-    this.setState({cells: result.cells,
+    this.path = [];
+    this.clickedCell = [];
+    this.goalCell = [];
+    this.goalValid = true;
+
+    this.setState({cells: [...result.cells],
                    width: result.width,
                    height: result.height,
                    num_cells: result.num_cells,
@@ -428,9 +296,8 @@ class SceneView extends React.Component {
                    cellSize: config.MAP_DISPLAY_WIDTH / result.width,
                    pixelsPerMeter: config.MAP_DISPLAY_WIDTH / (result.width * result.meters_per_cell),
                    mapLoaded: loaded,
-                   path: [],
-                   clickedCell: [],
-                   goalCell: [],
+                   visitCells: [],
+                   visitCellColours: [],
                    isRobotClicked: false});
   }
 
@@ -458,7 +325,30 @@ class SceneView extends React.Component {
 
     var x = event.clientX - this.rect.left;
     var y = this.rect.bottom - event.clientY;
-    this.setState({ clickedCell: this.pixelsToCell(x, y) });
+
+    this.clickedCell = this.pixelsToCell(x, y);
+
+    this.setMarkedCells();
+  }
+
+  setMarkedCells() {
+    var cells = [];
+    var colours = [];
+    if (this.clickedCell.length == 2) {
+      cells.push(this.clickedCell);
+      colours.push(config.CLICKED_CELL_COLOUR);
+    }
+    if (this.path.length > 0) {
+      cells = cells.concat(this.path);
+      colours = colours.concat(new Array(this.path.length).fill(config.PATH_COLOUR));
+    }
+    if (this.goalCell.length == 2) {
+      var goal_c = this.goalValid ? config.GOAL_CELL_COLOUR : config.BAD_GOAL_COLOUR;
+      cells.push(this.goalCell);
+      colours.push(goal_c);
+    }
+    this.setState({markedCells: [...cells],
+                   markedColours: [...colours]});
   }
 
   handleMouseDown(event) {
@@ -498,7 +388,7 @@ class SceneView extends React.Component {
   }
 
   timer() {
-    var length = this.state.path.length;
+    var length = this.path.length;
     if(length > this.i) {
       //move robot to the next spot
       this.findDirection();
@@ -510,14 +400,18 @@ class SceneView extends React.Component {
   }
 
   findDirection(){
-    var newCoord = this.posToPixels(this.state.path[this.i][1], this.state.path[this.i][0]);
+    var newCoord = this.posToPixels(this.path[this.i][1], this.path[this.i][0]);
     if (newCoord[0] == this.state.x && newCoord[1] == this.state.y) return;
     this.setState({x: newCoord[0], y: newCoord[1]});
   }
 
   onGoalClear() {
-    this.setState({clickedCell: [],
-                   goalCell: []});
+    this.path = [];
+    this.clickedCell = [];
+    this.goalCell = [];
+    this.goalValid = true;
+
+    this.setMarkedCells();
   }
 
   setGoal(goal) {
@@ -526,21 +420,27 @@ class SceneView extends React.Component {
     var idx = goal[1] + goal[0] * this.state.width;
     var valid = this.state.cells[idx] < 0.5;
 
-    this.setState({goalCell: goal, goalValid: valid});
+    this.goalCell = goal;
+    this.goalValid = valid;
+    this.path = [];
+
+    this.setMarkedCells();
 
     return valid;
   }
 
   onPlan() {
     // If goal isn't valid, don't plan.
-    if (!this.setGoal(this.state.clickedCell)) return;
+    if (!this.setGoal(this.clickedCell)) return;
     // Clear visted canvas
-    this.visitGrid.clear();
+    this.setState({visitCells: [],
+                   visitCellColours: []});
+
     var start_cell = this.pixelsToCell(this.state.x, this.state.y);
     var plan_data = {type: "plan",
                      data: {
                         map_name: this.state.mapfile.name,
-                        goal: "[" + this.state.clickedCell[0] + " " + this.state.clickedCell[1] + "]",
+                        goal: "[" + this.clickedCell[0] + " " + this.clickedCell[1] + "]",
                         start: "[" + start_cell[0] + " " + start_cell[1] + "]",
                         algo: config.ALGO_TYPES[this.state.algo].label
                       }
@@ -583,22 +483,37 @@ class SceneView extends React.Component {
               <span className="slider round"></span>
             </label>
           </div>
-          <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)} clickedCell={this.state.clickedCell}
+          <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)} clickedCell={this.clickedCell}
                          showField={this.state.showField} fieldVal={this.state.fieldHoverVal}/>
           <ConnectionStatus status={this.state.connection}/>
         </div>
 
         <div className="canvas-container" style={canvasStyle}>
-          <DrawMap cells={this.state.cells} width={this.state.width} height={this.state.height} />
-          <DrawField field={this.state.field} showField={this.state.showField}
-                     width={this.state.width} height={this.state.height} />
-          <canvas ref={this.visitCellsCanvas}
-                  width={config.MAP_DISPLAY_WIDTH}
-                  height={config.MAP_DISPLAY_WIDTH}>
-          </canvas>
-          <DrawCells loaded={this.state.mapLoaded} path={this.state.path}
-                     clickedCell={this.state.clickedCell} goalCell={this.state.goalCell}
-                     goalValid={this.state.goalValid} cellSize={this.state.cellSize} />
+          <GridCellCanvas id="mapCanvas"
+                          cells={this.state.cells}
+                          colours={this.state.mapColours}
+                          width={this.state.width} height={this.state.height}
+                          canvasSize={config.MAP_DISPLAY_WIDTH} />
+          {this.state.showField &&
+            <GridCellCanvas id={"fieldCanvas"} cells={this.state.field}
+                            colours={this.state.fieldColours}
+                            alpha={config.FIELD_ALPHA}
+                            width={this.state.width} height={this.state.height}
+                            canvasSize={config.MAP_DISPLAY_WIDTH} />
+          }
+          <GridCellCanvas id="visitCellsCanvas"
+                          cells={this.state.visitCells}
+                          colours={this.state.visitCellColours}
+                          width={this.state.width} height={this.state.height}
+                          cellScale={config.SMALL_CELL_SCALE}
+                          canvasSize={config.MAP_DISPLAY_WIDTH} />
+          <GridCellCanvas id="cellsCanvas"
+                          cells={this.state.markedCells}
+                          colours={this.state.markedColours}
+                          width={this.state.width} height={this.state.height}
+                          cellScale={config.SMALL_CELL_SCALE}
+                          canvasSize={config.MAP_DISPLAY_WIDTH} />
+
           <DrawRobot x={this.state.x} y={this.state.y} theta={this.state.theta}
                      loaded={this.state.mapLoaded} pixelsPerMeter={this.state.pixelsPerMeter}
                      posToPixels={(x, y) => this.posToPixels(x, y)} />
