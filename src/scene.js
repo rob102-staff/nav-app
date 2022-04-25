@@ -1,9 +1,9 @@
 import React from "react";
 
-import InputLabel from '@material-ui/core/InputLabel';
-import MenuItem from '@material-ui/core/MenuItem';
-import FormControl from '@material-ui/core/FormControl';
-import Select from '@material-ui/core/Select';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import Select from '@mui/material/Select';
 
 import config from "./config.js";
 import { WSHelper } from "./web.js";
@@ -77,7 +77,7 @@ function AlgoForm(props) {
     menu_items.push(<MenuItem value={algo} key={data.label}>{data.name}</MenuItem>);
   }
   return (
-    <FormControl className="algo-form">
+    <FormControl variant="standard" className="algo-form">
       <InputLabel id="select-algo-label">Algorithm</InputLabel>
       <Select
         labelId="select-algo-label"
