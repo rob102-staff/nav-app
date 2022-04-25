@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-import SceneView from './scene.js'
+import SceneView from './scene'
 
 ReactDOM.render(
   <React.StrictMode>
