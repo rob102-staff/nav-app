@@ -139,24 +139,15 @@ class SceneView extends React.Component {
 
     this.ws = new WSHelper(config.HOST, config.PORT, config.ENDPOINT, config.CONNECT_PERIOD);
     this.ws.userHandleMessage = (evt) => { this.handleMessage(evt); };
-    this.ws.statusCallback = (status) => { this.updateSocketStatus(status); };
+    this.ws.statusCallback = (status) => { this.handleSocketStatus(status); };
 
     this.clickCanvas = React.createRef();
     this.visitCellsCanvas = React.createRef();
   }
 
-  posToPixels(x, y) {
-    var u = (x * this.state.cellSize);
-    var v = (y * this.state.cellSize);
-
-    return [u, v];
-  }
-
-  pixelsToCell(u, v) {
-    var row = Math.floor(v / this.state.cellSize);
-    var col = Math.floor(u / this.state.cellSize);
-    return [row, col];
-  }
+  /********************
+   *  REACT FUNTIONS
+   ********************/
 
   componentDidMount() {
     // Get the window size and watch for resize events.
@@ -168,80 +159,9 @@ class SceneView extends React.Component {
     this.ws.attemptConnection();
   }
 
-  handleMessage(msg) {
-    var server_msg = JSON.parse(msg.data);
-
-    if (server_msg.type == "robot_path")
-    {
-      this.handlePath(server_msg.data);
-    }
-    else if (server_msg.type == "visited_cell")
-    {
-      this.handleCells(server_msg.data);
-    }
-    else if (server_msg.type == "field")
-    {
-      this.handleField(server_msg.data);
-    }
-    else
-    {
-      console.log("Unrecognized type", server_msg.type);
-    }
-  }
-
-  handleWindowChange(evt) {
-    this.rect = this.clickCanvas.current.getBoundingClientRect();
-  }
-
-  handlePath(msg) {
-    this.path = msg.path;
-    this.setMarkedCells();
-    var pixelPath = []
-    for (var i = 0; i < msg.path.length; i++) {
-      pixelPath.push(this.posToPixels(msg.path[i][1], msg.path[i][0]));
-    }
-    this.robotPathFollower.walkPath(pixelPath);
-  }
-
-  handleCells(msg) {
-    var visitNew = [...this.state.visitCells];
-    visitNew.push(msg.cell);
-    var colours = new Array(visitNew.length).fill(config.VISITED_CELL_COLOUR);
-    this.setState({visitCells: visitNew,
-                   visitCellColours: colours});
-  }
-
-  handleField(msg) {
-    var rawField = [...msg.field];
-    this.setState({ field: [...normalizeList(msg.field)], fieldRaw: rawField });
-  }
-
-  updateSocketStatus(status) {
-    if (this.state.connection !== status) {
-      this.setState({connection: status});
-    }
-  }
-
-  updateMap(result) {
-    var loaded = result.cells.length > 0;
-    this.path = [];
-    this.clickedCell = [];
-    this.goalCell = [];
-    this.goalValid = true;
-
-    this.setState({cells: [...result.cells],
-                   width: result.width,
-                   height: result.height,
-                   num_cells: result.num_cells,
-                   origin: result.origin,
-                   metersPerCell: result.meters_per_cell,
-                   cellSize: config.MAP_DISPLAY_WIDTH / result.width,
-                   pixelsPerMeter: config.MAP_DISPLAY_WIDTH / (result.width * result.meters_per_cell),
-                   mapLoaded: loaded,
-                   visitCells: [],
-                   visitCellColours: [],
-                   isRobotClicked: false});
-  }
+  /*****************************
+   *  COMPONENT EVENT HANDLERS
+   *****************************/
 
   onFileChange(event) {
     this.setState({ mapfile: event.target.files[0] });
@@ -262,73 +182,6 @@ class SceneView extends React.Component {
     this.ws.send(map_data);
   };
 
-  onMapClick(event) {
-    if (!this.state.mapLoaded) return;
-
-    var x = event.clientX - this.rect.left;
-    var y = this.rect.bottom - event.clientY;
-
-    this.clickedCell = this.pixelsToCell(x, y);
-
-    this.setMarkedCells();
-  }
-
-  setMarkedCells() {
-    var cells = [];
-    var colours = [];
-    if (this.clickedCell.length == 2) {
-      cells.push(this.clickedCell);
-      colours.push(config.CLICKED_CELL_COLOUR);
-    }
-    if (this.path.length > 0) {
-      cells = cells.concat(this.path);
-      colours = colours.concat(new Array(this.path.length).fill(config.PATH_COLOUR));
-    }
-    if (this.goalCell.length == 2) {
-      var goal_c = this.goalValid ? config.GOAL_CELL_COLOUR : config.BAD_GOAL_COLOUR;
-      cells.push(this.goalCell);
-      colours.push(goal_c);
-    }
-    this.setState({markedCells: [...cells],
-                   markedColours: [...colours]});
-  }
-
-  handleMouseDown(event) {
-    var x = event.clientX - this.rect.left;
-    var y = this.rect.bottom - event.clientY;
-    var robotRadius = config.ROBOT_SIZE *this.state.pixelsPerMeter / 2;
-    // if click is near robot, set isDown as true
-    if (x < this.state.x + robotRadius && x > this.state.x - robotRadius &&
-        y < this.state.y + robotRadius && y > this.state.y - robotRadius) {
-      this.setState({ isRobotClicked: true });
-    }
-    else {
-      this.onMapClick(event);
-    }
-  }
-
-  handleMouseMove(event) {
-    if (!this.state.showField && !this.state.isRobotClicked) return;
-
-    var x = event.clientX - this.rect.left;
-    var y = this.rect.bottom - event.clientY;
-
-    if (this.state.isRobotClicked) {
-      if (this.robotPathFollower.moving) this.robotPathFollower.stop();
-      this.setRobotPos(x, y);
-    }
-    if (this.state.showField && this.state.fieldRaw.length > 0) {
-      var cell = this.pixelsToCell(x, y);
-      var idx = Math.max(Math.min(cell[1] + cell[0] * this.state.width, this.state.num_cells - 1), 0);
-      this.setState({ fieldHoverVal: this.state.fieldRaw[idx] });
-    }
-  }
-
-  handleMouseUp() {
-    // Stops the robot from moving if clicked.
-    if (this.state.isRobotClicked) this.setState({isRobotClicked: false});
-  }
-
   onGoalClear() {
     this.path = [];
     this.clickedCell = [];
@@ -336,25 +189,6 @@ class SceneView extends React.Component {
     this.goalValid = true;
 
     this.setMarkedCells();
-  }
-
-  setRobotPos(x, y) {
-    this.setState({x: x, y: y});
-  }
-
-  setGoal(goal) {
-    if (goal.length === 0) return false;
-
-    var idx = goal[1] + goal[0] * this.state.width;
-    var valid = this.state.cells[idx] < 0.5;
-
-    this.goalCell = goal;
-    this.goalValid = valid;
-    this.path = [];
-
-    this.setMarkedCells();
-
-    return valid;
   }
 
   onPlan() {
@@ -383,21 +217,207 @@ class SceneView extends React.Component {
     this.setState({showField: !this.state.showField});
   }
 
-  handleAlgoSelect(event) {
+  onAlgoSelect(event) {
     this.setState({algo: event.target.value});
   }
 
-    render() {
-      var canvasStyle = {
-        width: config.MAP_DISPLAY_WIDTH + "px",
-        height: config.MAP_DISPLAY_WIDTH + "px",
-      };
+  /*************************
+   *  MOUSE EVENT HANDLERS
+   *************************/
+
+  handleWindowChange(evt) {
+    this.rect = this.clickCanvas.current.getBoundingClientRect();
+  }
+
+  handleMouseDown(event) {
+    var x = event.clientX - this.rect.left;
+    var y = this.rect.bottom - event.clientY;
+    var robotRadius = config.ROBOT_SIZE *this.state.pixelsPerMeter / 2;
+    // if click is near robot, set isDown as true
+    if (x < this.state.x + robotRadius && x > this.state.x - robotRadius &&
+        y < this.state.y + robotRadius && y > this.state.y - robotRadius) {
+      this.setState({ isRobotClicked: true });
+    }
+    else {
+      this.handleMapClick(event);
+    }
+  }
+
+  handleMouseUp() {
+    // Stops the robot from moving if clicked.
+    if (this.state.isRobotClicked) this.setState({isRobotClicked: false});
+  }
+
+  handleMouseMove(event) {
+    if (!this.state.showField && !this.state.isRobotClicked) return;
+
+    var x = event.clientX - this.rect.left;
+    var y = this.rect.bottom - event.clientY;
+
+    if (this.state.isRobotClicked) {
+      if (this.robotPathFollower.moving) this.robotPathFollower.stop();
+      this.setRobotPos(x, y);
+    }
+    if (this.state.showField && this.state.fieldRaw.length > 0) {
+      var cell = this.pixelsToCell(x, y);
+      var idx = Math.max(Math.min(cell[1] + cell[0] * this.state.width, this.state.num_cells - 1), 0);
+      this.setState({ fieldHoverVal: this.state.fieldRaw[idx] });
+    }
+  }
+
+  handleMapClick(event) {
+    if (!this.state.mapLoaded) return;
+
+    var x = event.clientX - this.rect.left;
+    var y = this.rect.bottom - event.clientY;
+
+    this.clickedCell = this.pixelsToCell(x, y);
+
+    this.setMarkedCells();
+  }
+
+  /********************
+   *   WS HANDLERS
+   ********************/
+
+  handleMessage(msg) {
+    var server_msg = JSON.parse(msg.data);
+
+    if (server_msg.type == "robot_path")
+    {
+      this.handlePath(server_msg.data);
+    }
+    else if (server_msg.type == "visited_cell")
+    {
+      this.handleCells(server_msg.data);
+    }
+    else if (server_msg.type == "field")
+    {
+      this.handleField(server_msg.data);
+    }
+    else
+    {
+      console.log("Unrecognized type", server_msg.type);
+    }
+  }
+
+  handlePath(msg) {
+    this.path = msg.path;
+    this.setMarkedCells();
+    var pixelPath = []
+    for (var i = 0; i < msg.path.length; i++) {
+      pixelPath.push(this.posToPixels(msg.path[i][1], msg.path[i][0]));
+    }
+    this.robotPathFollower.walkPath(pixelPath);
+  }
+
+  handleCells(msg) {
+    var visitNew = [...this.state.visitCells];
+    visitNew.push(msg.cell);
+    var colours = new Array(visitNew.length).fill(config.VISITED_CELL_COLOUR);
+    this.setState({visitCells: visitNew,
+                   visitCellColours: colours});
+  }
+
+  handleField(msg) {
+    var rawField = [...msg.field];
+    this.setState({ field: [...normalizeList(msg.field)], fieldRaw: rawField });
+  }
+
+  handleSocketStatus(status) {
+    if (this.state.connection !== status) {
+      this.setState({connection: status});
+    }
+  }
+
+  /********************
+   *      HELPERS
+   ********************/
+
+  updateMap(result) {
+    var loaded = result.cells.length > 0;
+    this.path = [];
+    this.clickedCell = [];
+    this.goalCell = [];
+    this.goalValid = true;
+
+    this.setState({cells: [...result.cells],
+                   width: result.width,
+                   height: result.height,
+                   num_cells: result.num_cells,
+                   origin: result.origin,
+                   metersPerCell: result.meters_per_cell,
+                   cellSize: config.MAP_DISPLAY_WIDTH / result.width,
+                   pixelsPerMeter: config.MAP_DISPLAY_WIDTH / (result.width * result.meters_per_cell),
+                   mapLoaded: loaded,
+                   visitCells: [],
+                   visitCellColours: [],
+                   isRobotClicked: false});
+  }
+
+  setRobotPos(x, y) {
+    this.setState({x: x, y: y});
+  }
+
+  setGoal(goal) {
+    if (goal.length === 0) return false;
+
+    var idx = goal[1] + goal[0] * this.state.width;
+    var valid = this.state.cells[idx] < 0.5;
+
+    this.goalCell = goal;
+    this.goalValid = valid;
+    this.path = [];
+
+    this.setMarkedCells();
+
+    return valid;
+  }
+
+  setMarkedCells() {
+    var cells = [];
+    var colours = [];
+    if (this.clickedCell.length == 2) {
+      cells.push(this.clickedCell);
+      colours.push(config.CLICKED_CELL_COLOUR);
+    }
+    if (this.path.length > 0) {
+      cells = cells.concat(this.path);
+      colours = colours.concat(new Array(this.path.length).fill(config.PATH_COLOUR));
+    }
+    if (this.goalCell.length == 2) {
+      var goal_c = this.goalValid ? config.GOAL_CELL_COLOUR : config.BAD_GOAL_COLOUR;
+      cells.push(this.goalCell);
+      colours.push(goal_c);
+    }
+    this.setState({markedCells: [...cells],
+                   markedColours: [...colours]});
+  }
+
+  posToPixels(x, y) {
+    var u = (x * this.state.cellSize);
+    var v = (y * this.state.cellSize);
+
+    return [u, v];
+  }
+
+  pixelsToCell(u, v) {
+    var row = Math.floor(v / this.state.cellSize);
+    var col = Math.floor(u / this.state.cellSize);
+    return [row, col];
+  }
+
+  render() {
+    var canvasStyle = {
+      width: config.MAP_DISPLAY_WIDTH + "px",
+      height: config.MAP_DISPLAY_WIDTH + "px",
+    };
 
     return (
       <div>
         <div className="select-wrapper">
           <MapFileSelect onChange={(event) => this.onFileChange(event)}/>
-          <AlgoForm onChange={(event) => this.handleAlgoSelect(event)} value={this.state.algo}/>
+          <AlgoForm onChange={(event) => this.onAlgoSelect(event)} value={this.state.algo}/>
         </div>
 
         <div className="button-wrapper">
@@ -447,7 +467,7 @@ class SceneView extends React.Component {
 
           <DrawRobot x={this.state.x} y={this.state.y} theta={this.state.theta}
                      pixelsPerMeter={this.state.pixelsPerMeter} />
-          <canvas ref={this.clickCanvas}
+          <canvas ref={this.clickCanvas} id="clickCanvas"
                   width={config.MAP_DISPLAY_WIDTH}
                   height={config.MAP_DISPLAY_WIDTH}
                   onMouseDown={(e) => this.handleMouseDown(e)}
