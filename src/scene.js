@@ -101,7 +101,9 @@ class SceneView extends React.Component {
 
     // React state.
     this.state = {
+      // Websocket connection.
       connection: WebSocket.CLOSED,
+      // Map parameters.
       cells: [],
       width: 0,
       height: 0,
@@ -111,28 +113,32 @@ class SceneView extends React.Component {
       pixelsPerMeter: 0,
       cellSize: 0,
       mapLoaded: false,
+      mapfile: null,
+      // Robot parameters.
       x: config.MAP_DISPLAY_WIDTH / 2,
       y: config.MAP_DISPLAY_WIDTH / 2,
       theta: 0,
-      mapfile: null,
+      isRobotClicked: false,
+      // Potential field.
       field: [],
       fieldRaw: [],
       fieldHoverVal: 0,
       showField: false,
-      isRobotClicked: false,
-      algo: 'PFIELD',
-      mapColours: [config.MAP_COLOUR_LOW, config.MAP_COLOUR_HIGH],
-      fieldColours: [config.FIELD_COLOUR_LOW, config.FIELD_COLOUR_HIGH],
+      // Marked cells for visualization.
+      path: [],
+      clickedCell: [],
+      goalCell: [],
+      goalValid: true,
       markedCells: [],
       markedColours: [],
       visitCells: [],
-      visitCellColours: []
+      visitCellColours: [],
+      // Algorithm.
+      algo: 'PFIELD'
     };
 
-    this.path = [];
-    this.clickedCell = [];
-    this.goalCell = [];
-    this.goalValid = true;
+    this.mapColours = [config.MAP_COLOUR_LOW, config.MAP_COLOUR_HIGH];
+    this.fieldColours = [config.FIELD_COLOUR_LOW, config.FIELD_COLOUR_HIGH];
 
     this.robotPathFollower = new RobotPathFollower(100);
     this.robotPathFollower.moveCallback = (x, y) => { this.setRobotPos(x, y); };
@@ -142,7 +148,6 @@ class SceneView extends React.Component {
     this.ws.statusCallback = (status) => { this.handleSocketStatus(status); };
 
     this.clickCanvas = React.createRef();
-    this.visitCellsCanvas = React.createRef();
   }
 
   /********************
@@ -183,18 +188,13 @@ class SceneView extends React.Component {
   };
 
   onGoalClear() {
-    this.path = [];
-    this.clickedCell = [];
-    this.goalCell = [];
-    this.goalValid = true;
-
-    this.setMarkedCells();
+    this.setMarkedCells([], [], [], true);
   }
 
   onPlan() {
     // If goal isn't valid, don't plan.
-    if (!this.setGoal(this.clickedCell)) return;
-    // Clear visted canvas
+    if (!this.setGoal(this.state.clickedCell)) return;
+    // Clear visted canvas.
     this.setState({visitCells: [],
                    visitCellColours: []});
     // Stop the robot.
@@ -205,7 +205,7 @@ class SceneView extends React.Component {
     var plan_data = {type: "plan",
                      data: {
                         map_name: this.state.mapfile.name,
-                        goal: "[" + this.clickedCell[0] + " " + this.clickedCell[1] + "]",
+                        goal: "[" + this.state.clickedCell[0] + " " + this.state.clickedCell[1] + "]",
                         start: "[" + start_cell[0] + " " + start_cell[1] + "]",
                         algo: config.ALGO_TYPES[this.state.algo].label
                       }
@@ -271,9 +271,10 @@ class SceneView extends React.Component {
     var x = event.clientX - this.rect.left;
     var y = this.rect.bottom - event.clientY;
 
-    this.clickedCell = this.pixelsToCell(x, y);
+    var clickedCell = this.pixelsToCell(x, y);
 
-    this.setMarkedCells();
+    this.setMarkedCells(this.state.path, clickedCell,
+                        this.state.goalCell, this.state.goalValid);
   }
 
   /********************
@@ -302,8 +303,8 @@ class SceneView extends React.Component {
   }
 
   handlePath(msg) {
-    this.path = msg.path;
-    this.setMarkedCells();
+    this.setMarkedCells(msg.path, this.state.clickedCell,
+                        this.state.goalCell, this.state.goalValid);
     var pixelPath = []
     for (var i = 0; i < msg.path.length; i++) {
       pixelPath.push(this.posToPixels(msg.path[i][1], msg.path[i][0]));
@@ -335,12 +336,6 @@ class SceneView extends React.Component {
    ********************/
 
   updateMap(result) {
-    var loaded = result.cells.length > 0;
-    this.path = [];
-    this.clickedCell = [];
-    this.goalCell = [];
-    this.goalValid = true;
-
     this.setState({cells: [...result.cells],
                    width: result.width,
                    height: result.height,
@@ -349,9 +344,17 @@ class SceneView extends React.Component {
                    metersPerCell: result.meters_per_cell,
                    cellSize: config.MAP_DISPLAY_WIDTH / result.width,
                    pixelsPerMeter: config.MAP_DISPLAY_WIDTH / (result.width * result.meters_per_cell),
-                   mapLoaded: loaded,
+                   mapLoaded: result.cells.length > 0,
+                   // Reset all the relevant app properties.
+                   field: [],
                    visitCells: [],
                    visitCellColours: [],
+                   path: [],
+                   clickedCell: [],
+                   goalCell: [],
+                   goalValid: true,
+                   markedCells: [],
+                   markedColours: [],
                    isRobotClicked: false});
   }
 
@@ -364,33 +367,32 @@ class SceneView extends React.Component {
 
     var idx = goal[1] + goal[0] * this.state.width;
     var valid = this.state.cells[idx] < 0.5;
-
-    this.goalCell = goal;
-    this.goalValid = valid;
-    this.path = [];
-
-    this.setMarkedCells();
+    this.setMarkedCells([], this.state.clickedCell, goal, valid);
 
     return valid;
   }
 
-  setMarkedCells() {
+  setMarkedCells(path, clicked, goal, goalValid) {
     var cells = [];
     var colours = [];
-    if (this.clickedCell.length == 2) {
-      cells.push(this.clickedCell);
+    if (clicked.length == 2) {
+      cells.push(clicked);
       colours.push(config.CLICKED_CELL_COLOUR);
     }
-    if (this.path.length > 0) {
-      cells = cells.concat(this.path);
-      colours = colours.concat(new Array(this.path.length).fill(config.PATH_COLOUR));
+    if (path.length > 0) {
+      cells = cells.concat(path);
+      colours = colours.concat(new Array(path.length).fill(config.PATH_COLOUR));
     }
-    if (this.goalCell.length == 2) {
-      var goal_c = this.goalValid ? config.GOAL_CELL_COLOUR : config.BAD_GOAL_COLOUR;
-      cells.push(this.goalCell);
+    if (goal.length == 2) {
+      var goal_c = goalValid ? config.GOAL_CELL_COLOUR : config.BAD_GOAL_COLOUR;
+      cells.push(goal);
       colours.push(goal_c);
     }
-    this.setState({markedCells: [...cells],
+    this.setState({path: path,
+                   clickedCell: clicked,
+                   goalCell: goal,
+                   goalValid: goalValid,
+                   markedCells: [...cells],
                    markedColours: [...colours]});
   }
 
@@ -434,7 +436,8 @@ class SceneView extends React.Component {
               <span className="slider round"></span>
             </label>
           </div>
-          <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)} clickedCell={this.clickedCell}
+          <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)}
+                         clickedCell={this.state.clickedCell}
                          showField={this.state.showField} fieldVal={this.state.fieldHoverVal}/>
           <ConnectionStatus status={this.state.connection}/>
         </div>
@@ -442,12 +445,12 @@ class SceneView extends React.Component {
         <div className="canvas-container" style={canvasStyle}>
           <GridCellCanvas id="mapCanvas"
                           cells={this.state.cells}
-                          colours={this.state.mapColours}
+                          colours={this.mapColours}
                           width={this.state.width} height={this.state.height}
                           canvasSize={config.MAP_DISPLAY_WIDTH} />
           {this.state.showField &&
             <GridCellCanvas id={"fieldCanvas"} cells={this.state.field}
-                            colours={this.state.fieldColours}
+                            colours={this.fieldColours}
                             alpha={config.FIELD_ALPHA}
                             width={this.state.width} height={this.state.height}
                             canvasSize={config.MAP_DISPLAY_WIDTH} />
