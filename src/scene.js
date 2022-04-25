@@ -7,8 +7,22 @@ import Select from '@material-ui/core/Select';
 
 import config from "./config.js";
 import { WSHelper } from "./web.js";
+import { DrawRobot } from "./robot.js";
 import { parseMap, normalizeList } from "./map.js";
 import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing.js"
+
+
+/*******************
+ *   MAP SELECT
+ *******************/
+
+function MapFileSelect(props) {
+  return (
+    <div className="file-input-wrapper">
+      <input className="file-input" type="file" onChange={props.onChange} />
+    </div>
+  );
+}
 
 /*******************
  *     BUTTONS
@@ -74,84 +88,6 @@ function AlgoForm(props) {
         {menu_items}
       </Select>
     </FormControl>
-  );
-}
-
-/*******************
- *     ROBOT
- *******************/
-
-class DrawRobot extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.robotCanvas = React.createRef();
-    this.robotCtx = null;
-
-    this.robotPos = [config.MAP_DISPLAY_WIDTH / 2, config.MAP_DISPLAY_WIDTH / 2];
-    this.robotSize = config.ROBOT_DEFAULT_SIZE;
-    this.robotAngle = 0;
-
-    this.robotImage = new Image(config.ROBOT_DEFAULT_SIZE, config.ROBOT_DEFAULT_SIZE);
-    this.robotImage.src = '../assets/mbot.png';
-  }
-
-  componentDidMount() {
-    this.robotCtx = this.robotCanvas.current.getContext('2d');
-    this.robotCtx.transform(1, 0, 0, -1, 0, 0);
-    this.robotCtx.transform(1, 0, 0, 1, 0, -this.robotCanvas.current.width);
-
-    // Apply the current transform since it will be cleared when first drawn.
-    this.robotCtx.translate(this.robotPos[0], this.robotPos[1]);
-    this.robotCtx.rotate(this.robotAngle);
-  }
-
-  drawRobot() {
-    // Clear the robot position.
-    this.robotCtx.clearRect(-this.robotSize / 2, -this.robotSize / 2, this.robotSize, this.robotSize);
-
-    // Reset the canvas since the last draw.
-    this.robotCtx.rotate(-this.robotAngle);
-    this.robotCtx.translate(-this.robotPos[0], -this.robotPos[1]);
-
-    if (this.props.loaded) {
-      // this updates position
-      this.robotPos = [this.props.x, this.props.y];
-      this.robotSize = config.ROBOT_SIZE * this.props.pixelsPerMeter;
-      this.robotAngle = this.props.theta;
-    }
-
-    this.robotCtx.translate(this.robotPos[0], this.robotPos[1]);
-    this.robotCtx.rotate(this.robotAngle);
-
-    // TODO: Scale the image once instead of every time.
-    this.robotCtx.drawImage(this.robotImage, -this.robotSize / 2, -this.robotSize / 2,
-                            this.robotSize, this.robotSize);
-  }
-
-  componentDidUpdate() {
-    this.drawRobot();
-  }
-
-  render() {
-    return (
-      <canvas ref={this.robotCanvas}
-              width={config.MAP_DISPLAY_WIDTH}
-              height={config.MAP_DISPLAY_WIDTH}>
-      </canvas>
-    );
-  }
-}
-
-/*******************
- *     CANVAS
- *******************/
-
-function MapFileSelect(props) {
-  return (
-    <div className="file-input-wrapper">
-      <input className="file-input" type="file" onChange={props.onChange} />
-    </div>
   );
 }
 
@@ -515,8 +451,7 @@ class SceneView extends React.Component {
                           canvasSize={config.MAP_DISPLAY_WIDTH} />
 
           <DrawRobot x={this.state.x} y={this.state.y} theta={this.state.theta}
-                     loaded={this.state.mapLoaded} pixelsPerMeter={this.state.pixelsPerMeter}
-                     posToPixels={(x, y) => this.posToPixels(x, y)} />
+                     pixelsPerMeter={this.state.pixelsPerMeter} />
           <canvas ref={this.clickCanvas}
                   width={config.MAP_DISPLAY_WIDTH}
                   height={config.MAP_DISPLAY_WIDTH}
