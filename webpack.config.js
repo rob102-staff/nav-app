@@ -25,9 +25,14 @@ module.exports = {
     filename: "bundle.js"
   },
   devServer: {
-    contentBase: path.join(__dirname, "public/"),
+    static: {
+      directory: path.resolve(__dirname, "public"),
+      serveIndex: true,
+      watch: true
+    },
     port: 8000,
-    publicPath: "http://0.0.0.0:8000/dist/",
-    hotOnly: true
+    devMiddleware: {
+      publicPath: "http://0.0.0.0:8000/dist/"
+    }
   }
 };
