@@ -15,6 +15,6 @@ npm install
 ```
 This only needs to be done once (or when the app is updated). To start the server, do:
 ```bash
-npm start
+npm run dev
 ```
 Navigate to [`http://localhost:8000`](http://localhost:8000) to use the app.

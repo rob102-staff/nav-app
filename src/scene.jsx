@@ -7,9 +7,9 @@ import Select from '@mui/material/Select';
 
 import config from "./config.js";
 import { WSHelper } from "./web.js";
-import { DrawRobot, RobotPathFollower } from "./robot.js";
+import { DrawRobot, RobotPathFollower } from "./robot";
 import { parseMap, normalizeList } from "./map.js";
-import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing.js"
+import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing"
 
 
 /*******************
