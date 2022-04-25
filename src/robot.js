@@ -7,6 +7,50 @@ function isClose(x, y) {
   return Math.abs(x - y) < SMALL;
 }
 
+class RobotPathFollower {
+  constructor(dt) {
+    this.dt = dt;
+    this.moveCallback = () => {};
+
+    this.moving = false;
+    this.path = [];
+    this.idx = 0;
+    this.moveInterval = null;
+  }
+
+  walkPath(path) {
+    if (this.moving) this.stop();
+    if (path.length < 1) return;
+
+    this.path = path;
+    this.idx = 0;
+    this.moving = true;
+
+    this.moveInterval = setInterval(() => { this.iterate(); }, this.dt);
+  }
+
+  iterate() {
+    if (!this.moving) return;
+
+    if (this.path.length > this.idx) {
+      // Move robot to the next waypoint.
+      this.moveCallback(this.path[this.idx][0], this.path[this.idx][1]);
+      this.idx += 1;
+    }
+    else {
+      this.stop();
+    }
+  }
+
+  stop() {
+    if (this.moveInterval !== null) {
+      clearInterval(this.moveInterval);
+    }
+    this.moving = false;
+  }
+
+}
+
 /*******************
  *     ROBOT
  *******************/
@@ -89,4 +133,4 @@ class DrawRobot extends React.Component {
   }
 }
 
-export { DrawRobot };
+export { DrawRobot, RobotPathFollower };

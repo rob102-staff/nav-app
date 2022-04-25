@@ -7,7 +7,7 @@ import Select from '@material-ui/core/Select';
 
 import config from "./config.js";
 import { WSHelper } from "./web.js";
-import { DrawRobot } from "./robot.js";
+import { DrawRobot, RobotPathFollower } from "./robot.js";
 import { parseMap, normalizeList } from "./map.js";
 import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing.js"
 
@@ -134,6 +134,9 @@ class SceneView extends React.Component {
     this.goalCell = [];
     this.goalValid = true;
 
+    this.robotPathFollower = new RobotPathFollower(100);
+    this.robotPathFollower.moveCallback = (x, y) => { this.setRobotPos(x, y); };
+
     this.ws = new WSHelper(config.HOST, config.PORT, config.ENDPOINT, config.CONNECT_PERIOD);
     this.ws.userHandleMessage = (evt) => { this.handleMessage(evt); };
     this.ws.statusCallback = (status) => { this.updateSocketStatus(status); };
@@ -193,8 +196,11 @@ class SceneView extends React.Component {
   handlePath(msg) {
     this.path = msg.path;
     this.setMarkedCells();
-    this.i = 0;
-    this.interval = setInterval(this.timer.bind(this), 100);
+    var pixelPath = []
+    for (var i = 0; i < msg.path.length; i++) {
+      pixelPath.push(this.posToPixels(msg.path[i][1], msg.path[i][0]));
+    }
+    this.robotPathFollower.walkPath(pixelPath);
   }
 
   handleCells(msg) {
@@ -308,7 +314,8 @@ class SceneView extends React.Component {
     var y = this.rect.bottom - event.clientY;
 
     if (this.state.isRobotClicked) {
-      this.setState({ x: x, y: y });
+      if (this.robotPathFollower.moving) this.robotPathFollower.stop();
+      this.setRobotPos(x, y);
     }
     if (this.state.showField && this.state.fieldRaw.length > 0) {
       var cell = this.pixelsToCell(x, y);
@@ -318,27 +325,8 @@ class SceneView extends React.Component {
   }
 
   handleMouseUp() {
-    if (this.state.isRobotClicked == false) return;
-    // this moves the robot along the path
-    this.setState({isRobotClicked: false});
-  }
-
-  timer() {
-    var length = this.path.length;
-    if(length > this.i) {
-      //move robot to the next spot
-      this.findDirection();
-      this.i = this.i + 1;
-    }
-    else {
-      clearInterval(this.interval);
-    }
-  }
-
-  findDirection(){
-    var newCoord = this.posToPixels(this.path[this.i][1], this.path[this.i][0]);
-    if (newCoord[0] == this.state.x && newCoord[1] == this.state.y) return;
-    this.setState({x: newCoord[0], y: newCoord[1]});
+    // Stops the robot from moving if clicked.
+    if (this.state.isRobotClicked) this.setState({isRobotClicked: false});
   }
 
   onGoalClear() {
@@ -348,6 +336,10 @@ class SceneView extends React.Component {
     this.goalValid = true;
 
     this.setMarkedCells();
+  }
+
+  setRobotPos(x, y) {
+    this.setState({x: x, y: y});
   }
 
   setGoal(goal) {
@@ -371,7 +363,10 @@ class SceneView extends React.Component {
     // Clear visted canvas
     this.setState({visitCells: [],
                    visitCellColours: []});
+    // Stop the robot.
+    this.robotPathFollower.stop();
 
+    // Send the plan message to the backend.
     var start_cell = this.pixelsToCell(this.state.x, this.state.y);
     var plan_data = {type: "plan",
                      data: {
