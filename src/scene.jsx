@@ -143,10 +143,6 @@ class SceneView extends React.Component {
     this.robotPathFollower = new RobotPathFollower(100);
     this.robotPathFollower.moveCallback = (x, y) => { this.setRobotPos(x, y); };
 
-    this.ws = new WSHelper(config.HOST, config.PORT, config.ENDPOINT, config.CONNECT_PERIOD);
-    this.ws.userHandleMessage = (evt) => { this.handleMessage(evt); };
-    this.ws.statusCallback = (status) => { this.handleSocketStatus(status); };
-
     this.clickCanvas = React.createRef();
   }
 
@@ -160,8 +156,6 @@ class SceneView extends React.Component {
     window.addEventListener('resize', (evt) => this.handleWindowChange(evt));
     window.addEventListener('scroll', (evt) => this.handleWindowChange(evt));
 
-    // Try to connect to the C++ backend.
-    this.ws.attemptConnection();
   }
 
   /*****************************
@@ -184,7 +178,6 @@ class SceneView extends React.Component {
 
     var map_data = {type: "map_file",
                     data: { file_name: this.state.mapfile.name } };
-    this.ws.send(map_data);
   };
 
   onGoalClear() {
@@ -210,7 +203,6 @@ class SceneView extends React.Component {
                         algo: config.ALGO_TYPES[this.state.algo].label
                       }
                     };
-    this.ws.send(plan_data);
   }
 
   onFieldCheck() {
@@ -275,60 +267,6 @@ class SceneView extends React.Component {
 
     this.setMarkedCells(this.state.path, clickedCell,
                         this.state.goalCell, this.state.goalValid);
-  }
-
-  /********************
-   *   WS HANDLERS
-   ********************/
-
-  handleMessage(msg) {
-    var server_msg = JSON.parse(msg.data);
-
-    if (server_msg.type == "robot_path")
-    {
-      this.handlePath(server_msg.data);
-    }
-    else if (server_msg.type == "visited_cell")
-    {
-      this.handleCells(server_msg.data);
-    }
-    else if (server_msg.type == "field")
-    {
-      this.handleField(server_msg.data);
-    }
-    else
-    {
-      console.log("Unrecognized type", server_msg.type);
-    }
-  }
-
-  handlePath(msg) {
-    this.setMarkedCells(msg.path, this.state.clickedCell,
-                        this.state.goalCell, this.state.goalValid);
-    var pixelPath = []
-    for (var i = 0; i < msg.path.length; i++) {
-      pixelPath.push(this.posToPixels(msg.path[i][1], msg.path[i][0]));
-    }
-    this.robotPathFollower.walkPath(pixelPath);
-  }
-
-  handleCells(msg) {
-    var visitNew = [...this.state.visitCells];
-    visitNew.push(msg.cell);
-    var colours = new Array(visitNew.length).fill(config.VISITED_CELL_COLOUR);
-    this.setState({visitCells: visitNew,
-                   visitCellColours: colours});
-  }
-
-  handleField(msg) {
-    var rawField = [...msg.field];
-    this.setState({ field: [...normalizeList(msg.field)], fieldRaw: rawField });
-  }
-
-  handleSocketStatus(status) {
-    if (this.state.connection !== status) {
-      this.setState({connection: status});
-    }
   }
 
   /********************
