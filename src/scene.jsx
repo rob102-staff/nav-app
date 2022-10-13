@@ -6,27 +6,43 @@ import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 
 import config from "./config.js";
-import { WSHelper } from "./web.js";
 import { DrawRobot, RobotPathFollower } from "./robot";
 import { parseMap, normalizeList } from "./map.js";
 import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing"
 
-
-/*******************
- *   MAP SELECT
- *******************/
-
-function MapFileSelect(props) {
-  return (
-    <div className="file-input-wrapper">
-      <input className="file-input" type="file" onChange={props.onChange} />
-    </div>
-  );
-}
-
 /*******************
  *     BUTTONS
  *******************/
+
+/*******************
+ *   Special File Upload Button
+ *******************/
+
+ const FileUploader = props => {
+  const hiddenFileInput = React.useRef(null);
+  
+  const handleClick = event => {
+    hiddenFileInput.current.click();
+  };
+  const handleChange = event => {
+    const fileUploaded = event.target.files[0];
+    props.handleFile(fileUploaded);
+  };
+  return (
+    <>
+      <button className={"button"} onClick={handleClick}>
+        {props.buttonText}
+      </button>
+      <input type="file"
+             ref={hiddenFileInput}
+             onChange={handleChange}
+             style={{display:'none'}} 
+             accept={props.filetype}
+      /> 
+    </>
+  );
+};
+
 
 function StatusMessage(props) {
   var msg = [];
@@ -41,25 +57,6 @@ function StatusMessage(props) {
   return (
     <div className="status-msg">
       {msg.join('\xa0\xa0\xa0')}
-    </div>
-  );
-}
-
-function ConnectionStatus(props) {
-  var msg = "Wait";
-  var colour = "#ffd300";
-  if (props.status === WebSocket.OPEN) {
-    msg = "Connected";
-    colour = "#00ff00";
-  }
-  else if (props.status === WebSocket.CLOSED) {
-    msg = "Not Connected";
-    colour = "#ff0000";
-  }
-
-  return (
-    <div className="status" style={{backgroundColor: colour}}>
-      {msg}
     </div>
   );
 }
@@ -101,8 +98,6 @@ class SceneView extends React.Component {
 
     // React state.
     this.state = {
-      // Websocket connection.
-      connection: WebSocket.CLOSED,
       // Map parameters.
       cells: [],
       width: 0,
@@ -114,6 +109,10 @@ class SceneView extends React.Component {
       cellSize: 0,
       mapLoaded: false,
       mapfile: null,
+      
+      // Parameters for the robot path file.
+      planfile: null,
+
       // Robot parameters.
       x: config.MAP_DISPLAY_WIDTH / 2,
       y: config.MAP_DISPLAY_WIDTH / 2,
@@ -166,18 +165,16 @@ class SceneView extends React.Component {
     this.setState({ mapfile: event.target.files[0] });
   }
 
-  onFileUpload() {
-    if (this.state.mapfile === null) return;
-
+  onMapFileUpload(mapfile) {
+    this.setState({ mapfile: mapfile });
+    console.log("On File Upload!")
+    if (mapfile === null) return;
     var fr = new FileReader();
     fr.onload = (evt) => {
       var map = parseMap(fr.result);
       this.updateMap(map);
     }
-    fr.readAsText(this.state.mapfile);
-
-    var map_data = {type: "map_file",
-                    data: { file_name: this.state.mapfile.name } };
+    fr.readAsText(mapfile);
   };
 
   onGoalClear() {
@@ -356,12 +353,14 @@ class SceneView extends React.Component {
     return (
       <div>
         <div className="select-wrapper">
-          <MapFileSelect onChange={(event) => this.onFileChange(event)}/>
           <AlgoForm onChange={(event) => this.onAlgoSelect(event)} value={this.state.algo}/>
         </div>
 
         <div className="button-wrapper">
-          <button className="button" onClick={() => this.onFileUpload()}>Upload Map</button>
+          <FileUploader buttonText={"Upload Map File"} 
+            filetype={".map"} 
+            handleFile={(event) => { this.onMapFileUpload(event) }}></FileUploader>
+          <FileUploader buttonText={"Upload Plan File"}></FileUploader>
           <button className="button" onClick={() => this.onGoalClear()}>Clear Goal</button>
           <button className="button" onClick={() => this.onPlan()}>Plan!</button>
         </div>
@@ -377,7 +376,6 @@ class SceneView extends React.Component {
           <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)}
                          clickedCell={this.state.clickedCell}
                          showField={this.state.showField} fieldVal={this.state.fieldHoverVal}/>
-          <ConnectionStatus status={this.state.connection}/>
         </div>
 
         <div className="canvas-container" style={canvasStyle}>
