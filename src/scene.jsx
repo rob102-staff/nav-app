@@ -1,6 +1,7 @@
 import React from "react";
 
 import InputLabel from '@mui/material/InputLabel';
+import Slider from "@mui/material/Slider";
 import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
@@ -62,33 +63,6 @@ function StatusMessage(props) {
 }
 
 /*******************
- *   ALGO SELECT
- *******************/
-
-function AlgoForm(props) {
-  var menu_items = [];
-  var key, value;
-  for (const algo in config.ALGO_TYPES)
-  {
-    var data = config.ALGO_TYPES[algo];
-    menu_items.push(<MenuItem value={algo} key={data.label}>{data.name}</MenuItem>);
-  }
-  return (
-    <FormControl variant="standard" className="algo-form">
-      <InputLabel id="select-algo-label">Algorithm</InputLabel>
-      <Select
-        labelId="select-algo-label"
-        id="select-algo"
-        value={props.value}
-        onChange={props.onChange}
-      >
-        {menu_items}
-      </Select>
-    </FormControl>
-  );
-}
-
-/*******************
  *   WHOLE PAGE
  *******************/
 
@@ -110,8 +84,17 @@ class SceneView extends React.Component {
       mapLoaded: false,
       mapfile: null,
       
+      // Path planning data
+      plan_speed_base: 100, // time in ms.
+      plan_speedup: 50, // speed up multiplier.
+
       // Parameters for the robot path file.
       planfile: null,
+      planfile_loaded: false,
+      is_planning: false, // Is the path planner running?
+      is_paused: false, // Is the path planner paused?
+      finished_planning: false, // The path planner has finished running.
+      step: 0,
 
       // Robot parameters.
       x: config.MAP_DISPLAY_WIDTH / 2,
@@ -157,17 +140,16 @@ class SceneView extends React.Component {
 
   }
 
+  onPlanSpeedupChange(event, value) {
+    this.setState({plan_speedup: value});
+  }
+
   /*****************************
    *  COMPONENT EVENT HANDLERS
    *****************************/
 
-  onFileChange(event) {
-    this.setState({ mapfile: event.target.files[0] });
-  }
-
   onMapFileUpload(mapfile) {
     this.setState({ mapfile: mapfile });
-    console.log("On File Upload!")
     if (mapfile === null) return;
     var fr = new FileReader();
     fr.onload = (evt) => {
@@ -192,14 +174,99 @@ class SceneView extends React.Component {
 
     // Send the plan message to the backend.
     var start_cell = this.pixelsToCell(this.state.x, this.state.y);
-    var plan_data = {type: "plan",
-                     data: {
-                        map_name: this.state.mapfile.name,
-                        goal: "[" + this.state.clickedCell[0] + " " + this.state.clickedCell[1] + "]",
-                        start: "[" + start_cell[0] + " " + start_cell[1] + "]",
-                        algo: config.ALGO_TYPES[this.state.algo].label
-                      }
-                    };
+  }
+
+  handlePlanFile(file) {
+    var reader = new FileReader();
+    reader.onload = (e) => {
+      var plan = JSON.parse(e.target.result);
+      this.setState({planfile_loaded: true,
+                     planfile_json: plan});
+      //this.displayFilePlan(plan);
+    }
+    reader.readAsText(file);
+  }
+
+  async displayFilePlan() {
+
+    if(!this.state.planfile_loaded) {
+      return;
+    }
+
+    // Ensure that is_planning is set before moving on. 
+    await this.setState({is_planning: true})
+    const plan = this.state.planfile_json;
+
+      this.onPlanUpdate(plan, this.state.step);
+  }
+
+  // plan is a json containing a list of cell locations and 
+  // a list of the path. We first plot the cell locations one by one,
+  // then display the path once everything is plotted.
+  onPlanUpdate(plan, step) {
+
+    // Stop running the plan update loop if we are 
+    // not planning at this moment.
+    if(!this.state.is_planning || this.state.is_paused) {
+      return; 
+    }
+
+    if (step == 0) {
+      console.log("Setting robot position!")
+      console.log("Setting robot to " + plan["path"][0][0] + " " + plan["path"][0][1])
+      const pos = this.pixelsToCell(plan["path"][0][0], plan["path"][0][1]);
+      this.setRobotPos(pos[0], pos[1]);
+    }
+
+    // If plan is empty, don't do anything.
+    if (plan["visited_cells"].length === 0) return;
+
+    // if plan is equal to step length, then plot the path
+    if (plan["visited_cells"].length === step) {
+      // this.setMarkedCells([], [], plan, true);
+      this.setState({is_planning: false, finished_planning: true});
+      this.setState({
+        markedCells: plan["path"],
+        markedColours: new Array(plan["path"].length).fill(config.CLICKED_CELL_COLOUR),
+      })
+      return;
+    }
+
+    // plot the cell locations
+    var cell = plan["visited_cells"][step];
+
+    var cell_colour = config.VISITED_CELL_COLOUR;
+    this.setState({
+      visitCells: this.state.visitCells.concat([cell]),
+      visitCellColours: this.state.visitCellColours.concat([cell_colour])
+    });
+
+    this.state.step += 1; 
+
+    // set timeout for the next loop 
+    setTimeout(() => this.onPlanUpdate(plan, this.state.step), this.state.plan_speed_base - this.state.plan_speedup);
+
+  }
+
+  async onTogglePause() {
+    const pause_state = this.state.is_paused;
+    await this.setState({is_paused: !this.state.is_paused});
+  
+    if(pause_state) {
+      this.onPlanUpdate(this.state.planfile_json, this.state.step);
+    }
+  }
+
+  onResetPlan() {
+    this.setState({
+      is_planning: false,
+      is_paused: false,
+      finished_planning: false,
+      step: 0,
+      visitCells: [],
+      visitCellColours: [],
+      plan: [],
+    });
   }
 
   onFieldCheck() {
@@ -352,21 +419,30 @@ class SceneView extends React.Component {
 
     return (
       <div>
-        <div className="select-wrapper">
-          <AlgoForm onChange={(event) => this.onAlgoSelect(event)} value={this.state.algo}/>
-        </div>
-
         <div className="button-wrapper">
           <FileUploader buttonText={"Upload Map File"} 
             filetype={".map"} 
             handleFile={(event) => { this.onMapFileUpload(event) }}></FileUploader>
-          <FileUploader buttonText={"Upload Plan File"}></FileUploader>
-          <button className="button" onClick={() => this.onGoalClear()}>Clear Goal</button>
-          <button className="button" onClick={() => this.onPlan()}>Plan!</button>
-        </div>
+          <FileUploader filetype=".plan" buttonText={"Upload Plan File"} handleFile={(event) => { this.handlePlanFile(event) }} />
+          {
+          (this.state.mapLoaded && this.state.planfile_loaded && !this.state.is_planning) &&
+          <button className="button" onClick={() => this.displayFilePlan()}>Plan!</button>
+          }
+          {
+            (this.state.is_planning) && 
+            <button className="button" onClick={() => this.onTogglePause()}>
+              {this.state.is_paused ? "Resume" : "Pause"}
+              </button>
+          }
+          {
+            (this.state.is_finished || this.state.is_planning) && 
+            <button className="button" onClick={() => this.onResetPlan()}>Reset</button>
+          }
+          </div>
 
         <div className="status-wrapper">
           <div className="field-toggle-wrapper">
+              <Slider value={this.state.plan_speedup ? this.state.plan_speedup : 1} onChange={(_, v) => this.onPlanSpeedupChange(_, v)}></Slider>
             <span>Show Field:</span>
             <label className="switch">
               <input type="checkbox" onClick={() => this.onFieldCheck()}/>
