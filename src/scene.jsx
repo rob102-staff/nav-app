@@ -19,9 +19,9 @@ import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing"
  *   Special File Upload Button
  *******************/
 
- const FileUploader = props => {
+const FileUploader = props => {
   const hiddenFileInput = React.useRef(null);
-  
+
   const handleClick = event => {
     hiddenFileInput.current.click();
   };
@@ -35,11 +35,11 @@ import { colourStringToRGB, getColor, GridCellCanvas } from "./drawing"
         {props.buttonText}
       </button>
       <input type="file"
-             ref={hiddenFileInput}
-             onChange={handleChange}
-             style={{display:'none'}} 
-             accept={props.filetype}
-      /> 
+        ref={hiddenFileInput}
+        onChange={handleChange}
+        style={{ display: 'none' }}
+        accept={props.filetype}
+      />
     </>
   );
 };
@@ -83,7 +83,7 @@ class SceneView extends React.Component {
       cellSize: 0,
       mapLoaded: false,
       mapfile: null,
-      
+
       // Path planning data
       plan_speed_base: 100, // time in ms.
       plan_speedup: 50, // speed up multiplier.
@@ -140,64 +140,57 @@ class SceneView extends React.Component {
 
   }
 
-  onPlanSpeedupChange(event, value) {
-    this.setState({plan_speedup: value});
+  // Callback for when plan speed slider
+  onPlanSpeedupChange(_, value) {
+    this.setState({ plan_speedup: value });
   }
 
   /*****************************
    *  COMPONENT EVENT HANDLERS
    *****************************/
 
-  onMapFileUpload(mapfile) {
-    this.setState({ mapfile: mapfile });
-    if (mapfile === null) return;
-    var fr = new FileReader();
-    fr.onload = (evt) => {
-      var map = parseMap(fr.result);
-      this.updateMap(map);
-    }
-    fr.readAsText(mapfile);
-  };
+  // Callback for when a planner file is uploaded by the user.
+  onPlannerFileUpload(file) {
+    this.setState({ planner_file: file });
 
-  onGoalClear() {
-    this.setMarkedCells([], [], [], true);
-  }
-
-  onPlan() {
-    // If goal isn't valid, don't plan.
-    if (!this.setGoal(this.state.clickedCell)) return;
-    // Clear visted canvas.
-    this.setState({visitCells: [],
-                   visitCellColours: []});
-    // Stop the robot.
-    this.robotPathFollower.stop();
-
-    // Send the plan message to the backend.
-    var start_cell = this.pixelsToCell(this.state.x, this.state.y);
-  }
-
-  handlePlanFile(file) {
     var reader = new FileReader();
+
     reader.onload = (e) => {
-      var plan = JSON.parse(e.target.result);
-      this.setState({planfile_loaded: true,
-                     planfile_json: plan});
-      //this.displayFilePlan(plan);
+      var planfile_json = JSON.parse(e.target.result);
+      this.setState({
+        planfile_loaded: true,
+        planfile_json: planfile_json
+      });
+      this.parseAndUpdateMap(planfile_json["map"]);
+      this.setState({
+        planfile_loaded: true,
+        planfile_json: planfile_json
+      });
+      this.setGoal(planfile_json["goal"]);
     }
     reader.readAsText(file);
+
   }
 
+  // Take a mapfile string, and parse and update the map
+  parseAndUpdateMap(mapfile_string) {
+    var map = parseMap(mapfile_string);
+    this.updateMap(map);
+  }
+
+  // When called, this shows all the cells that the robot has visited,
+  // and then shows the final path (if it exists).
   async displayFilePlan() {
 
-    if(!this.state.planfile_loaded) {
+    if (!this.state.planfile_loaded) {
       return;
     }
 
     // Ensure that is_planning is set before moving on. 
-    await this.setState({is_planning: true})
+    await this.setState({ is_planning: true })
     const plan = this.state.planfile_json;
 
-      this.onPlanUpdate(plan, this.state.step);
+    this.onPlanUpdate(plan, this.state.step);
   }
 
   // plan is a json containing a list of cell locations and 
@@ -207,24 +200,14 @@ class SceneView extends React.Component {
 
     // Stop running the plan update loop if we are 
     // not planning at this moment.
-    if(!this.state.is_planning || this.state.is_paused) {
-      return; 
+    if (!this.state.is_planning || this.state.is_paused) {
+      return;
     }
-
-    if (step == 0) {
-      console.log("Setting robot position!")
-      console.log("Setting robot to " + plan["path"][0][0] + " " + plan["path"][0][1])
-      const pos = this.pixelsToCell(plan["path"][0][0], plan["path"][0][1]);
-      this.setRobotPos(pos[0], pos[1]);
-    }
-
-    // If plan is empty, don't do anything.
-    if (plan["visited_cells"].length === 0) return;
-
+    console.log(step + " " + plan["visited_cells"].length);
     // if plan is equal to step length, then plot the path
     if (plan["visited_cells"].length === step) {
       // this.setMarkedCells([], [], plan, true);
-      this.setState({is_planning: false, finished_planning: true});
+      this.setState({ is_planning: false, finished_planning: true });
       this.setState({
         markedCells: plan["path"],
         markedColours: new Array(plan["path"].length).fill(config.CLICKED_CELL_COLOUR),
@@ -241,22 +224,24 @@ class SceneView extends React.Component {
       visitCellColours: this.state.visitCellColours.concat([cell_colour])
     });
 
-    this.state.step += 1; 
+    this.state.step += 1;
 
     // set timeout for the next loop 
     setTimeout(() => this.onPlanUpdate(plan, this.state.step), this.state.plan_speed_base - this.state.plan_speedup);
 
   }
 
+  // Callback for when the user clicks the "Pause" button.
   async onTogglePause() {
     const pause_state = this.state.is_paused;
-    await this.setState({is_paused: !this.state.is_paused});
-  
-    if(pause_state) {
+    await this.setState({ is_paused: !this.state.is_paused });
+
+    if (pause_state) {
       this.onPlanUpdate(this.state.planfile_json, this.state.step);
     }
   }
 
+  // Callback for when the user clicks the "Reset" button.
   onResetPlan() {
     this.setState({
       is_planning: false,
@@ -270,11 +255,7 @@ class SceneView extends React.Component {
   }
 
   onFieldCheck() {
-    this.setState({showField: !this.state.showField});
-  }
-
-  onAlgoSelect(event) {
-    this.setState({algo: event.target.value});
+    this.setState({ showField: !this.state.showField });
   }
 
   /*************************
@@ -288,10 +269,10 @@ class SceneView extends React.Component {
   handleMouseDown(event) {
     var x = event.clientX - this.rect.left;
     var y = this.rect.bottom - event.clientY;
-    var robotRadius = config.ROBOT_SIZE *this.state.pixelsPerMeter / 2;
+    var robotRadius = config.ROBOT_SIZE * this.state.pixelsPerMeter / 2;
     // if click is near robot, set isDown as true
     if (x < this.state.x + robotRadius && x > this.state.x - robotRadius &&
-        y < this.state.y + robotRadius && y > this.state.y - robotRadius) {
+      y < this.state.y + robotRadius && y > this.state.y - robotRadius) {
       this.setState({ isRobotClicked: true });
     }
     else {
@@ -301,7 +282,7 @@ class SceneView extends React.Component {
 
   handleMouseUp() {
     // Stops the robot from moving if clicked.
-    if (this.state.isRobotClicked) this.setState({isRobotClicked: false});
+    if (this.state.isRobotClicked) this.setState({ isRobotClicked: false });
   }
 
   handleMouseMove(event) {
@@ -330,7 +311,7 @@ class SceneView extends React.Component {
     var clickedCell = this.pixelsToCell(x, y);
 
     this.setMarkedCells(this.state.path, clickedCell,
-                        this.state.goalCell, this.state.goalValid);
+      this.state.goalCell, this.state.goalValid);
   }
 
   /********************
@@ -338,30 +319,32 @@ class SceneView extends React.Component {
    ********************/
 
   updateMap(result) {
-    this.setState({cells: [...result.cells],
-                   width: result.width,
-                   height: result.height,
-                   num_cells: result.num_cells,
-                   origin: result.origin,
-                   metersPerCell: result.meters_per_cell,
-                   cellSize: config.MAP_DISPLAY_WIDTH / result.width,
-                   pixelsPerMeter: config.MAP_DISPLAY_WIDTH / (result.width * result.meters_per_cell),
-                   mapLoaded: result.cells.length > 0,
-                   // Reset all the relevant app properties.
-                   field: [],
-                   visitCells: [],
-                   visitCellColours: [],
-                   path: [],
-                   clickedCell: [],
-                   goalCell: [],
-                   goalValid: true,
-                   markedCells: [],
-                   markedColours: [],
-                   isRobotClicked: false});
+    this.setState({
+      cells: [...result.cells],
+      width: result.width,
+      height: result.height,
+      num_cells: result.num_cells,
+      origin: result.origin,
+      metersPerCell: result.meters_per_cell,
+      cellSize: config.MAP_DISPLAY_WIDTH / result.width,
+      pixelsPerMeter: config.MAP_DISPLAY_WIDTH / (result.width * result.meters_per_cell),
+      mapLoaded: result.cells.length > 0,
+      // Reset all the relevant app properties.
+      field: [],
+      visitCells: [],
+      visitCellColours: [],
+      path: [],
+      clickedCell: [],
+      goalCell: [],
+      goalValid: true,
+      markedCells: [],
+      markedColours: [],
+      isRobotClicked: false
+    });
   }
 
   setRobotPos(x, y) {
-    this.setState({x: x, y: y});
+    this.setState({ x: x, y: y });
   }
 
   setGoal(goal) {
@@ -390,12 +373,14 @@ class SceneView extends React.Component {
       cells.push(goal);
       colours.push(goal_c);
     }
-    this.setState({path: path,
-                   clickedCell: clicked,
-                   goalCell: goal,
-                   goalValid: goalValid,
-                   markedCells: [...cells],
-                   markedColours: [...colours]});
+    this.setState({
+      path: path,
+      clickedCell: clicked,
+      goalCell: goal,
+      goalValid: goalValid,
+      markedCells: [...cells],
+      markedColours: [...colours]
+    });
   }
 
   posToPixels(x, y) {
@@ -420,74 +405,71 @@ class SceneView extends React.Component {
     return (
       <div>
         <div className="button-wrapper">
-          <FileUploader buttonText={"Upload Map File"} 
-            filetype={".map"} 
-            handleFile={(event) => { this.onMapFileUpload(event) }}></FileUploader>
-          <FileUploader filetype=".plan" buttonText={"Upload Plan File"} handleFile={(event) => { this.handlePlanFile(event) }} />
+          <FileUploader filetype=".planner" buttonText={"Upload Planner File"} handleFile={(event) => { this.onPlannerFileUpload(event) }} />
           {
-          (this.state.mapLoaded && this.state.planfile_loaded && !this.state.is_planning) &&
-          <button className="button" onClick={() => this.displayFilePlan()}>Plan!</button>
+            (this.state.mapLoaded && this.state.planfile_loaded && !this.state.is_planning) &&
+            <button className="button" onClick={() => this.displayFilePlan()}>Plan!</button>
           }
           {
-            (this.state.is_planning) && 
+            (this.state.is_planning) &&
             <button className="button" onClick={() => this.onTogglePause()}>
               {this.state.is_paused ? "Resume" : "Pause"}
-              </button>
+            </button>
           }
           {
-            (this.state.is_finished || this.state.is_planning) && 
+            (this.state.is_finished || this.state.is_planning) &&
             <button className="button" onClick={() => this.onResetPlan()}>Reset</button>
           }
-          </div>
+        </div>
 
         <div className="status-wrapper">
           <div className="field-toggle-wrapper">
-              <Slider value={this.state.plan_speedup ? this.state.plan_speedup : 1} onChange={(_, v) => this.onPlanSpeedupChange(_, v)}></Slider>
+            <Slider value={this.state.plan_speedup ? this.state.plan_speedup : 1} onChange={(_, v) => this.onPlanSpeedupChange(_, v)}></Slider>
             <span>Show Field:</span>
             <label className="switch">
-              <input type="checkbox" onClick={() => this.onFieldCheck()}/>
+              <input type="checkbox" onClick={() => this.onFieldCheck()} />
               <span className="slider round"></span>
             </label>
           </div>
           <StatusMessage robotCell={this.pixelsToCell(this.state.x, this.state.y)}
-                         clickedCell={this.state.clickedCell}
-                         showField={this.state.showField} fieldVal={this.state.fieldHoverVal}/>
+            clickedCell={this.state.clickedCell}
+            showField={this.state.showField} fieldVal={this.state.fieldHoverVal} />
         </div>
 
         <div className="canvas-container" style={canvasStyle}>
           <GridCellCanvas id="mapCanvas"
-                          cells={this.state.cells}
-                          colours={this.mapColours}
-                          width={this.state.width} height={this.state.height}
-                          canvasSize={config.MAP_DISPLAY_WIDTH} />
+            cells={this.state.cells}
+            colours={this.mapColours}
+            width={this.state.width} height={this.state.height}
+            canvasSize={config.MAP_DISPLAY_WIDTH} />
           {this.state.showField &&
             <GridCellCanvas id={"fieldCanvas"} cells={this.state.field}
-                            colours={this.fieldColours}
-                            alpha={config.FIELD_ALPHA}
-                            width={this.state.width} height={this.state.height}
-                            canvasSize={config.MAP_DISPLAY_WIDTH} />
+              colours={this.fieldColours}
+              alpha={config.FIELD_ALPHA}
+              width={this.state.width} height={this.state.height}
+              canvasSize={config.MAP_DISPLAY_WIDTH} />
           }
           <GridCellCanvas id="visitCellsCanvas"
-                          cells={this.state.visitCells}
-                          colours={this.state.visitCellColours}
-                          width={this.state.width} height={this.state.height}
-                          cellScale={config.SMALL_CELL_SCALE}
-                          canvasSize={config.MAP_DISPLAY_WIDTH} />
+            cells={this.state.visitCells}
+            colours={this.state.visitCellColours}
+            width={this.state.width} height={this.state.height}
+            cellScale={config.SMALL_CELL_SCALE}
+            canvasSize={config.MAP_DISPLAY_WIDTH} />
           <GridCellCanvas id="cellsCanvas"
-                          cells={this.state.markedCells}
-                          colours={this.state.markedColours}
-                          width={this.state.width} height={this.state.height}
-                          cellScale={config.SMALL_CELL_SCALE}
-                          canvasSize={config.MAP_DISPLAY_WIDTH} />
+            cells={this.state.markedCells}
+            colours={this.state.markedColours}
+            width={this.state.width} height={this.state.height}
+            cellScale={config.SMALL_CELL_SCALE}
+            canvasSize={config.MAP_DISPLAY_WIDTH} />
 
           <DrawRobot x={this.state.x} y={this.state.y} theta={this.state.theta}
-                     pixelsPerMeter={this.state.pixelsPerMeter} />
+            pixelsPerMeter={this.state.pixelsPerMeter} />
           <canvas ref={this.clickCanvas} id="clickCanvas"
-                  width={config.MAP_DISPLAY_WIDTH}
-                  height={config.MAP_DISPLAY_WIDTH}
-                  onMouseDown={(e) => this.handleMouseDown(e)}
-                  onMouseMove={(e) => this.handleMouseMove(e)}
-                  onMouseUp={() => this.handleMouseUp()}>
+            width={config.MAP_DISPLAY_WIDTH}
+            height={config.MAP_DISPLAY_WIDTH}
+            onMouseDown={(e) => this.handleMouseDown(e)}
+            onMouseMove={(e) => this.handleMouseMove(e)}
+            onMouseUp={() => this.handleMouseUp()}>
           </canvas>
         </div>
       </div>
