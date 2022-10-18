@@ -157,20 +157,23 @@ class SceneView extends React.Component {
 
     reader.onload = (e) => {
       var planfile_json = JSON.parse(e.target.result);
-      this.setState({
-        planfile_loaded: true,
-        planfile_json: planfile_json
-      });
-      this.parseAndUpdateMap(planfile_json["map"]);
-      this.setState({
-        planfile_loaded: true,
-        planfile_json: planfile_json
-      });
-      this.setGoal(planfile_json["goal"]);
+      this.updateWithPlanfileJson(planfile_json);
     }
     reader.readAsText(file);
 
   }
+
+  updateWithPlanfileJson(planfile_json) {
+    this.parseAndUpdateMap(planfile_json["map"]);
+    this.setState({
+      planfile_loaded: true,
+      planfile_json: planfile_json
+    });
+    this.setGoal(planfile_json["goal"]);
+    let start_rob_pixels = this.posToPixels(planfile_json["start"][0], planfile_json["start"][1]);
+    this.setRobotPos(start_rob_pixels[1], start_rob_pixels[0]);
+  }
+
 
   // Take a mapfile string, and parse and update the map
   parseAndUpdateMap(mapfile_string) {
@@ -212,6 +215,7 @@ class SceneView extends React.Component {
         markedCells: plan["path"],
         markedColours: new Array(plan["path"].length).fill(config.CLICKED_CELL_COLOUR),
       })
+      this.onMoveRobot(plan["path"], 0); // start moving the robot
       return;
     }
 
@@ -229,6 +233,22 @@ class SceneView extends React.Component {
     // set timeout for the next loop 
     setTimeout(() => this.onPlanUpdate(plan, this.state.step), this.state.plan_speed_base - this.state.plan_speedup);
 
+  }
+
+  // Function that moves the robot along the path 
+  // once the path has been plotted.
+  onMoveRobot(path, step) {
+    if (step >= path.length) {
+      return;
+    }
+
+    var cell = path[step];
+    
+    // set robot position to cell position
+    var cell_pixels = this.posToPixels(cell[0], cell[1]);
+    this.setRobotPos(cell_pixels[1], cell_pixels[0]);
+
+    setTimeout(() => this.onMoveRobot(path, step + 1), this.state.plan_speed_base - this.state.plan_speedup);
   }
 
   // Callback for when the user clicks the "Pause" button.
