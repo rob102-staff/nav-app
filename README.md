@@ -18,3 +18,30 @@ This only needs to be done once (or when the app is updated). To start the serve
 npm run dev
 ```
 Navigate to [`http://localhost:8000`](http://localhost:8000) to use the app.
+
+# Deploying  the application to Github Pages
+
+Before deploying, you must ensure that the production version of the application works.
+To do so, first run
+
+```bash
+npm run build
+```
+
+which will build the production version of code. 
+Once built, run
+
+```bash
+npm run serve
+```
+
+and navigate to the specified url to ensure that the production code works.
+
+Once you've ensured the production code is working (its possible that dev code works and production code fails),
+run 
+
+```bash
+npm run deploy
+```
+
+and the code will automatically be deployed to github pages.
