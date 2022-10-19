@@ -2,25 +2,28 @@
  * MAP HELPERS
  *******************/
 
+// Parse a map from a string. Do not worry about new lines.
 function parseMap(data) {
-  var map = {};
-
+  var map = {}; 
   var lines = data.trim().split('\n');
-  var header = lines.shift();
-  header = header.split(/\s+/);
 
+  // The header is the first 5 elements of the first line
+  var header = lines[0].split(/\s+/).slice(0, 5);
   map.origin = [parseFloat(header[0]), parseFloat(header[1])];
   map.width = parseFloat(header[2]);
   map.height = parseFloat(header[3]);
   map.meters_per_cell = parseFloat(header[4]);
   map.num_cells = map.width * map.height;
 
+  // Now that the header is saved, we can get rid of the header elements
+  lines[0] = lines[0].split(/\s+/).slice(5).join(' ');
+
   map.cells = [];
 
   for (let line of lines) {
     line = line.trim().split(/\s+/);
 
-    if (line.length == 1) continue;
+    if (line.length == 1) continue; // TODO: is this needed? 
 
     for (let ele of line) {
       map.cells.push(parseInt(ele));
@@ -32,7 +35,7 @@ function parseMap(data) {
   if (map.cells.length !== map.num_cells) {
     console.warn("Map has wrong number of cells:", map.cells.length, "!==", map.num_cells);
   }
-
+  
   return map;
 }
 

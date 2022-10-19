@@ -1,6 +1,8 @@
 import React from "react";
 import config from "./config.js";
 
+import mbotUrl from "../assets/mbot.png";
+
 const SMALL = 1e-4;
 
 function isClose(x, y) {
@@ -67,7 +69,7 @@ class DrawRobot extends React.Component {
     this.lastRobotAngle = 0;
 
     this.robotImage = new Image(config.ROBOT_DEFAULT_SIZE, config.ROBOT_DEFAULT_SIZE);
-    this.robotImage.src = '../assets/mbot.png';
+    this.robotImage.src = mbotUrl;
   }
 
   componentDidMount() {
