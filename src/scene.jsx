@@ -206,7 +206,6 @@ class SceneView extends React.Component {
     if (!this.state.is_planning || this.state.is_paused) {
       return;
     }
-    console.log(step + " " + plan["visited_cells"].length);
     // if plan is equal to step length, then plot the path
     if (plan["visited_cells"].length === step) {
       // this.setMarkedCells([], [], plan, true);
